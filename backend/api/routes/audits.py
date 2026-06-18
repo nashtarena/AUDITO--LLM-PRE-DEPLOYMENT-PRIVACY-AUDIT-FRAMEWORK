@@ -79,7 +79,7 @@ def create_audit(
     )
     db.add(audit)
     db.commit()
-    db.refresh(audit)
+    db.flush()
 
     # Launch background task
     from workers.tasks import run_audit_task
@@ -88,7 +88,8 @@ def create_audit(
     audit.status = AuditStatus.running
     db.commit()
 
-    db.refresh(audit)
+    db.commit()
+    db.flush()
     return audit
 
 

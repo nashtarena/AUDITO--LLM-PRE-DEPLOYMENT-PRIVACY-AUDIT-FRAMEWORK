@@ -1,0 +1,15 @@
+2026-06-18 13:56:37.206 | INFO     | workers.tasks:run_audit_task:40 - Audit 3489c3de-60bf-47d4-bb07-cf0b85d4656d: 20 ref, 20 gen texts
+2026-06-18 13:56:37.221 | INFO     | services.audit_orchestrator:_progress:20 - Audit progress 10% - Running exact match detection
+2026-06-18 13:56:38.191 | ERROR    | workers.tasks:run_audit_task:97 - Audit 3489c3de-60bf-47d4-bb07-cf0b85d4656d failed: No module named 'detection'
+2026-06-18 14:01:01.503 | INFO     | workers.tasks:run_audit_task:40 - Audit 4ed3b7df-3c4a-4b55-8e8d-0a65f1bf1fe7: 20 ref, 20 gen texts
+2026-06-18 14:01:01.510 | INFO     | services.audit_orchestrator:_progress:20 - Audit progress 10% - Running exact match detection
+2026-06-18 14:01:02.038 | ERROR    | workers.tasks:run_audit_task:97 - Audit 4ed3b7df-3c4a-4b55-8e8d-0a65f1bf1fe7 failed: No module named 'detection'
+2026-06-18 15:24:22.220 | INFO     | workers.tasks:run_audit_task:46 - Audit d2571a55-8915-4246-a35e-c010755b1b4e: 20 ref, 20 gen texts
+2026-06-18 15:24:22.229 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 10% - Running exact match detection
+2026-06-18 15:24:22.705 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 30% - Running semantic similarity (FAISS)
+2026-06-18 15:26:28.878 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 55% - Running membership inference
+2026-06-18 15:26:30.011 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 70% - Running canary exposure testing
+2026-06-18 15:26:30.919 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 82% - Running sensitive data detection
+2026-06-18 15:26:31.827 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 93% - Computing risk score
+2026-06-18 15:26:32.731 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 100% - Audit complete
+2026-06-18 15:26:35.982 | INFO     | workers.tasks:run_audit_task:99 - Audit d2571a55-8915-4246-a35e-c010755b1b4e completed. Risk: Medium (49.8)
