@@ -9,6 +9,10 @@ from database.session import Base, engine
 from api.routes import auth, projects, datasets, audits, notifications, analytics
 import models  # noqa: F401 — ensures all models are registered
 
+from dotenv import load_dotenv
+
+load_dotenv()  # Load environment variables from .env file
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
@@ -32,7 +36,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # update with Vercel URL in production
+    allow_origins=["http://localhost:3000", os.getenv("FRONTEND_URL")],  # update with Vercel URL in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
