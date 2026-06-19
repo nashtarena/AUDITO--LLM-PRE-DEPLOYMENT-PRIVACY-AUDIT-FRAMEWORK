@@ -46,7 +46,10 @@ app.include_router(audits.router, prefix="/api")
 app.include_router(notifications.router, prefix="/api")
 app.include_router(analytics.router, prefix="/api")
 
-
+@app.get("/") 
+def root():
+    return {"Message" : "Backend is running!"}
+    
 @app.get("/health")
 def health():
     return {"status": "ok"}
