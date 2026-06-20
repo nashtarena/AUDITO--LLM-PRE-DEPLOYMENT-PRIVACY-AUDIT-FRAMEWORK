@@ -24,3 +24,12 @@
 2026-06-19 21:36:42.996 | INFO     | workers.tasks:run_audit_task:99 - Audit f119b347-5355-4305-b3ee-161b1160eba1 completed. Risk: Medium (49.8)
 2026-06-20 09:04:53.860 | INFO     | workers.tasks:run_audit_task:46 - Audit d46ad873-969c-4129-bbe1-3a165664da57: 10000 ref, 10000 gen texts
 2026-06-20 09:04:53.895 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 10% - Running exact match detection
+2026-06-20 09:21:40.717 | INFO     | workers.tasks:run_audit_task:46 - Audit 0d9f66e6-3b7b-4dbf-aaf3-1c6df285de8e: 20 ref, 20 gen texts
+2026-06-20 09:21:40.750 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 10% - Running exact match detection
+2026-06-20 09:21:41.406 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 30% - Running semantic similarity (FAISS)
+2026-06-20 09:23:09.146 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 55% - Running membership inference
+2026-06-20 09:23:12.536 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 70% - Running canary exposure testing
+2026-06-20 09:23:15.164 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 82% - Running sensitive data detection
+2026-06-20 09:23:16.403 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 93% - Computing risk score
+2026-06-20 09:23:17.579 | INFO     | services.audit_orchestrator:_progress:27 - Audit progress 100% - Audit complete
+2026-06-20 09:23:22.197 | INFO     | workers.tasks:run_audit_task:99 - Audit 0d9f66e6-3b7b-4dbf-aaf3-1c6df285de8e completed. Risk: Medium (49.8)

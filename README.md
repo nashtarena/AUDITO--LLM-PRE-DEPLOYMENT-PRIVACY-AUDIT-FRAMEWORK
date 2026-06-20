@@ -1,194 +1,207 @@
-# Audito — LLM Privacy Leakage Auditing Platform
+# Audito
 
-Detect data memorization and privacy leakage in large language models.
+**LLM Data Memorization & Privacy Leakage Auditing Platform**
 
----
-
-## Stack
-
-| Layer | Tech |
-|-------|------|
-| Frontend | Next.js 15, TypeScript, Tailwind CSS, Recharts |
-| Backend | FastAPI, Python 3.11 |
-| Database | PostgreSQL (SQLAlchemy ORM) |
-| Cache / Queue | Redis + Celery |
-| AI/ML | sentence-transformers, FAISS, PyTorch |
-| Reports | ReportLab PDF |
+Audito lets you audit AI model outputs for privacy risks. Upload a reference dataset (potential training data) and a generated dataset (model outputs), and Audito runs a 6-engine analysis pipeline to detect memorization, PII leakage, and training data exposure — returning a single risk score with a full breakdown and downloadable PDF report.
 
 ---
 
-## Local Development (Docker — recommended)
+## Demo
 
-### Prerequisites
-- Docker Desktop installed and running
-- Git
+<!-- Add demo video here -->
+> 📹 [DEMO VIDEO](https://drive.google.com/file/d/1cwdHXxpTOd-u3bJhVL3aAaCk80ej7SlP/view?usp=drive_link)
 
-### Steps
+---
 
-```bash
-# 1. Clone the repo
-git clone https://github.com/yourname/audito.git
-cd audito
+## Architecture
 
-# 2. Set a secret key
-echo "SECRET_KEY=your-secret-key-here" > .env
+<!-- Add architecture diagram here -->
+> 🗺️ ![Architecture Diagram](https://drive.google.com/file/d/1P_gyUleos3tvafLmG1fQ46YWHkq8yJmx/view?usp=drive_link)
 
-# 3. Start everything
-docker compose up --build
+**High-level flow:**
 
-# Frontend → http://localhost:3000
-# Backend  → http://localhost:8000
-# API docs → http://localhost:8000/docs
+```
+User → Next.js Frontend
+         ↓ REST API (JWT auth)
+     FastAPI Backend
+         ↓ enqueues task
+     Celery Worker  ←→  Redis (broker)
+         ↓ runs pipeline
+     6-Engine Audit Orchestrator
+         ↓ persists results
+     PostgreSQL
 ```
 
-That's it. Docker will:
-- Start PostgreSQL and create tables automatically
-- Start Redis
-- Build and start the FastAPI backend
-- Build and start the Celery worker
-- Build and start the Next.js frontend
+---
+
+## How It Works
+
+Each audit runs 6 independent engines in sequence, each contributing a weighted component to the final 0–100 risk score:
+
+| Engine | Weight | What it detects |
+|---|---|---|
+| Exact Match | 25% | Verbatim string matches + Levenshtein similarity (>0.85) + n-gram overlap |
+| Semantic Similarity | 25% | Dense vector similarity via `sentence-transformers` + FAISS nearest-neighbor search |
+| Membership Inference | 20% | Token frequency analysis + 4-gram phrase overlap to estimate training data membership |
+| Canary Exposure | 15% | Detects user-defined canary strings and common secret patterns in outputs |
+| Sensitive Data Detection | 15% | Regex scanning for PII: emails, phone numbers, SSNs, credit cards, API keys, JWTs, AWS keys, private keys, passwords |
+| Risk Scoring | — | Weighted combination → 0–100 score → Low / Medium / High / Critical |
 
 ---
 
-## Local Development (Manual)
+## Features
 
-### Backend
+- **Project management** — group audits by AI model under named projects
+- **Dataset upload** — upload reference and generated datasets as CSV, JSON, or TXT (up to 50 MB)
+- **Async audit pipeline** — audits run in the background via Celery with real-time progress polling
+- **Detailed results** — per-engine scores, top semantic matches, sensitive findings with masked values, canary hits
+- **PDF reports** — generate and download professional audit reports with score breakdowns and recommendations
+- **Dashboard analytics** — risk distribution charts, average risk score, recent audit history
+- **In-app notifications** — notified when audits complete with risk level summary
+- **Role-based access** — `admin`, `researcher`, and `viewer` roles with enforced permissions
+- **Rate limiting** — built-in API rate limiting via `slowapi`
+
+---
+
+## Tech Stack
+
+**Backend**
+- [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn
+- PostgreSQL (Neon) + SQLAlchemy 2.0
+- Celery + Redis
+- `sentence-transformers` (`all-mpnet-base-v2`) + FAISS for semantic search
+- `python-jose` + `passlib[bcrypt]` for JWT auth
+- ReportLab for PDF generation
+- Loguru for structured logging
+
+**Frontend**
+- [Next.js 15](https://nextjs.org/) (App Router, standalone output)
+- TypeScript + Tailwind CSS
+- Recharts for dashboard visualizations
+- Radix UI primitives
+- Axios with cookie-based JWT
+
+**Infrastructure**
+- Docker + Docker Compose
+- Deployable to Railway (backend) and Vercel (frontend)
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Docker and Docker Compose
+- (For local dev without Docker) Python 3.11+, Node.js 18+, PostgreSQL or Neon Cloud, Redis Cloud
+
+### Run with Docker
+
+```bash
+git clone https://github.com/your-org/audito.git
+cd audito
+
+# Set a secure secret key
+export SECRET_KEY=your-secret-key-here
+
+docker-compose up --build
+```
+
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Docs | http://localhost:8000/docs |
+
+### Local Development
+
+**Backend**
 
 ```bash
 cd backend
-
-# 1. Create virtualenv
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
 
-# 2. Install dependencies
 pip install -r requirements.txt
+```
 
-# 3. Set environment variables
-cp .env.example .env
-# Edit .env — fill in DATABASE_URL and SECRET_KEY
+Create `backend/.env`:
 
-# 4. Start PostgreSQL and Redis (or use Docker just for these)
-docker run -d -p 5432:5432 -e POSTGRES_USER=audito -e POSTGRES_PASSWORD=audito_pass -e POSTGRES_DB=audito postgres:16-alpine
-docker run -d -p 6379:6379 redis:7-alpine
+```env
+DATABASE_URL=postgresql://audito:audito_pass@localhost:5432/audito
+REDIS_URL=redis://localhost:6379/0
+SECRET_KEY=change-me-in-development
+FRONTEND_URL=http://localhost:3000
+```
 
-# 5. Start the API
+```bash
+# Start API
 uvicorn main:app --reload
-# → http://localhost:8000/docs
 
-# 6. In a separate terminal, start the Celery worker
+# Start Celery worker (separate terminal)
 celery -A workers.celery_app worker --loglevel=info
 ```
 
-### Frontend
+**Frontend**
 
 ```bash
 cd frontend
 npm install
-# Edit .env.local if needed (default points to localhost:8000)
-npm run dev
-# → http://localhost:3000
 ```
 
----
-
-## Deployment
-
-### Step 1 — Neon (PostgreSQL)
-
-1. Go to https://neon.tech → create a free account
-2. Create a new project called `audito`
-3. Copy the connection string — looks like:
-   ```
-   postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/audito?sslmode=require
-   ```
-4. Save this — you'll use it as `DATABASE_URL`
-
----
-
-### Step 2 — Upstash (Redis)
-
-1. Go to https://upstash.com → create a free account
-2. Create a new Redis database (region: same as your backend)
-3. Copy the `REDIS_URL` — looks like:
-   ```
-   rediss://default:xxxxx@xxx.upstash.io:6379
-   ```
-
----
-
-### Step 3 — Railway (Backend + Celery Worker)
-
-1. Go to https://railway.app → connect your GitHub account
-2. Click **New Project → Deploy from GitHub repo**
-3. Select your repo, set root directory to `/backend`
-4. Railway auto-detects the Dockerfile
-
-**Set these environment variables in Railway:**
-
-| Variable | Value |
-|----------|-------|
-| `DATABASE_URL` | Your Neon connection string |
-| `REDIS_URL` | Your Upstash Redis URL |
-| `SECRET_KEY` | A random 32+ character string |
-| `ALGORITHM` | `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` |
-
-5. Click **Deploy**
-6. Once deployed, copy your Railway URL — e.g. `https://audito-backend.up.railway.app`
-
-**Deploy the Celery Worker (second Railway service):**
-
-1. In the same Railway project, click **+ New Service → GitHub Repo** (same repo)
-2. Set root directory to `/backend`
-3. Override the start command:
-   ```
-   celery -A workers.celery_app worker --loglevel=info --concurrency=2
-   ```
-4. Set the same environment variables as the backend service
-
----
-
-### Step 4 — Vercel (Frontend)
-
-1. Go to https://vercel.com → connect your GitHub account
-2. Click **New Project → Import** your repo
-3. Set root directory to `/frontend`
-4. Add environment variable:
-   | Variable | Value |
-   |----------|-------|
-   | `NEXT_PUBLIC_API_URL` | Your Railway backend URL (e.g. `https://audito-backend.up.railway.app`) |
-5. Click **Deploy**
-
-**Important:** After deploying, go to your Railway backend → Environment Variables and update:
-- Add `ALLOWED_ORIGINS=https://your-vercel-app.vercel.app`
-
-Then update `backend/main.py` CORS to read from env:
-```python
-allow_origins=[os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")]
-```
-
----
-
-## Environment Variables Reference
-
-### Backend `.env`
-
-```env
-DATABASE_URL=postgresql://user:pass@host:5432/audito
-REDIS_URL=redis://localhost:6379/0
-SECRET_KEY=your-random-secret-key-at-least-32-chars
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-UPLOAD_DIR=uploads
-FAISS_INDEX_DIR=faiss_indexes
-```
-
-### Frontend `.env.local`
+Create `frontend/.env.local`:
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
+
+```bash
+npm run dev
+```
+
+---
+
+## API Overview
+
+All routes are prefixed with `/api`. Authentication uses Bearer tokens (JWT).
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/auth/register` | Register a new user |
+| `POST` | `/api/auth/login` | Login, returns JWT |
+| `GET` | `/api/auth/me` | Get current user |
+| `GET/POST` | `/api/projects` | List / create projects |
+| `GET/PATCH/DELETE` | `/api/projects/{id}` | Manage a project |
+| `POST` | `/api/datasets` | Upload a dataset (multipart) |
+| `GET` | `/api/datasets/project/{id}` | List datasets for a project |
+| `POST` | `/api/audits` | Create and queue an audit |
+| `GET` | `/api/audits/{id}` | Get audit status and results |
+| `GET` | `/api/audits/project/{id}` | List audits for a project |
+| `POST` | `/api/reports/{audit_id}/generate` | Generate PDF report |
+| `GET` | `/api/reports/{audit_id}/download` | Download PDF report |
+| `GET` | `/api/analytics/dashboard` | Dashboard summary stats |
+| `GET` | `/api/notifications` | List notifications |
+| `PATCH` | `/api/notifications/{id}/read` | Mark notification as read |
+
+Full interactive docs at `/docs` (Swagger UI) when the backend is running.
+
+---
+
+## Risk Scoring
+
+```
+Risk Score = (exact_match × 0.25) + (semantic_sim × 0.25) + (membership × 0.20)
+           + (canary_exposure/100 × 0.15) + (sensitive_data × 0.15)
+```
+
+Thresholds:
+
+| Score | Level |
+|---|---|
+| 0–25 | 🟢 Low |
+| 26–50 | 🟡 Medium |
+| 51–75 | 🟠 High |
+| 76–100 | 🔴 Critical |
 
 ---
 
@@ -196,60 +209,54 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ```
 audito/
-├── frontend/                    # Next.js 15 app
-│   ├── app/
-│   │   ├── (auth)/login/        # Sign in page
-│   │   ├── (auth)/register/     # Register page
-│   │   ├── dashboard/           # Analytics dashboard
-│   │   ├── projects/            # Project list + detail
-│   │   ├── audits/              # Audit history
-│   │   └── notifications/       # Notifications
-│   ├── components/
-│   │   ├── layout/              # Sidebar, AppShell
-│   │   └── ui/                  # Button, Card, Badge, Input, ProgressBar
-│   ├── lib/                     # API client, auth helpers, utils
-│   └── types/                   # TypeScript types
-│
 ├── backend/
-│   ├── api/routes/              # FastAPI route handlers
-│   ├── models/                  # SQLAlchemy DB models
-│   ├── services/                # Audit orchestrator
-│   ├── detection/               # Exact match + sensitive data engines
-│   ├── similarity/              # FAISS semantic similarity engine
-│   ├── membership/              # Membership inference engine
-│   ├── exposure/                # Canary exposure engine
-│   ├── scoring/                 # Risk scoring engine
-│   ├── reports/                 # PDF report generator
-│   ├── workers/                 # Celery tasks
-│   ├── utils/                   # Auth, logger, dataset loader
-│   └── main.py                  # FastAPI app entry point
-│
-└── docker-compose.yml
+│   ├── api/routes/         # FastAPI route handlers
+│   ├── detection/          # Exact match + sensitive data engines
+│   ├── similarity/         # Semantic similarity (FAISS)
+│   ├── membership/         # Membership inference engine
+│   ├── exposure/           # Canary exposure engine
+│   ├── scoring/            # Risk scoring engine
+│   ├── services/           # Audit orchestrator
+│   ├── workers/            # Celery app + tasks
+│   ├── models/             # SQLAlchemy ORM models
+│   ├── reports/            # PDF report generator
+│   └── utils/              # Auth, logging, dataset loader
+└── frontend/
+    ├── app/                # Next.js App Router pages
+    ├── components/         # UI components
+    ├── lib/                # API client, auth utilities
+    └── types/              # TypeScript type definitions
 ```
 
 ---
 
-## How It Works
+## Deployment
 
-1. User creates a project (model name + description)
-2. User uploads two datasets:
-   - **Reference dataset** — potential training data (CSV/JSON/TXT)
-   - **Generated outputs** — model responses to audit
-3. User clicks **Run audit**
-4. Backend launches a Celery background task that runs 6 engines:
-   - **Exact Match** — string + n-gram + Levenshtein comparison
-   - **Semantic Similarity** — sentence-transformers embeddings + FAISS search
-   - **Membership Inference** — token frequency + n-gram phrase overlap
-   - **Canary Exposure** — regex + exact string detection of secret strings
-   - **Sensitive Data** — regex patterns for emails, SSNs, API keys, etc.
-   - **Risk Scoring** — weighted combination → 0-100 score + Low/Medium/High/Critical
-5. Results appear in real-time on the project page (3s polling)
-6. User can download a PDF report
+**Backend → Railway**
+
+The `backend/railway.toml` is pre-configured. Set `SECRET_KEY`, `DATABASE_URL`, and `REDIS_URL` as environment variables in your Railway project. The Celery worker runs as a separate service using the same Docker image with the command override from `docker-compose.yml`.
+
+**Frontend → Vercel**
+
+Set `NEXT_PUBLIC_API_URL` to your Railway backend URL. The Next.js config is set to `output: 'standalone'` and `frontend/vercel.json` handles routing.
 
 ---
 
-## Generating a Secret Key
+## Environment Variables
 
-```bash
-python -c "import secrets; print(secrets.token_hex(32))"
-```
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `REDIS_URL` | ✅ | Redis connection string |
+| `SECRET_KEY` | ✅ | JWT signing secret — use a long random string in production |
+| `ALGORITHM` | | JWT algorithm, default `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | | Token TTL, default `30` |
+| `FRONTEND_URL` | | Frontend origin for CORS, default `http://localhost:3000` |
+| `UPLOAD_DIR` | | Dataset upload directory, default `uploads` |
+| `MAX_UPLOAD_SIZE_MB` | | Max file size, default `50` |
+
+---
+
+## License
+
+MIT
