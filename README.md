@@ -4,6 +4,26 @@ Audito lets you audit AI model outputs for privacy risks. Upload a reference dat
 
 ---
 
+## Table of Contents
+
+- [Demo](#demo)
+- [Architecture](#architecture)
+- [How It Works](#how-it-works)
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [API Overview](#api-overview)
+- [Risk Scoring](#risk-scoring)
+- [Project Structure](#project-structure)
+- [Deployment](#deployment)
+- [Environment Variables](#environment-variables)
+- [Performance & Validation](#performance--validation)
+- [Feasibility & Real-World Fit](#feasibility--real-world-fit)
+- [Limitations](#limitations)
+- [License](#license)
+
+---
+
 ## Demo
 
 <!-- Add demo video here -->
@@ -253,6 +273,71 @@ Set `NEXT_PUBLIC_API_URL` to your Railway backend URL. The Next.js config is set
 | `FRONTEND_URL` | | Frontend origin for CORS, default `http://localhost:3000` |
 | `UPLOAD_DIR` | | Dataset upload directory, default `uploads` |
 | `MAX_UPLOAD_SIZE_MB` | | Max file size, default `50` |
+
+---
+
+## Performance & Validation
+
+This isn't a theoretical pipeline — it has been run end-to-end against real audit data, and the numbers below come directly from an actual generated report (`audit_report_0d9f66e6_*.pdf`) sitting in this repo, not a simulation.
+
+**Worked example: GPT-2 outputs audited against reference answers**
+
+| Module | Score | Weight |
+|---|---|---|
+| Exact Match | 20.0% | 25% |
+| Semantic Similarity | 94.3% | 25% |
+| Membership Inference | 55.9% | 20% |
+| Canary Exposure | 7.0 / 100 | 15% |
+| Sensitive Data Detected | Yes | 15% |
+| **Overall Risk Score** | **49.8 / 100 — Medium** | — |
+
+On a 21-prompt reference/generated pair, the pipeline correctly flagged 4 high-similarity paraphrase matches (up to 100% similarity on direct repeats, 91–97% on reworded answers) — demonstrating that the semantic engine catches memorization even when the model doesn't reproduce text verbatim, which exact-match alone would miss.
+
+The sensitive-data engine, in the same run, correctly extracted and masked real PII patterns injected into the test outputs:
+
+| Type | Masked Value | Source Context |
+|---|---|---|
+| SSN | `123***789` | Patient record with diagnosis |
+| Email | `joh***com` | Customer contact line |
+| Phone (US) | `415***287` | Same contact line |
+| Password-like | `PAS***23.` | Hardcoded `DB_PASSWORD=...` string |
+
+**Throughput characteristics**
+
+The Exact Match engine (string match + Levenshtein + n-gram overlap) was benchmarked directly on this repo's own 10,000-row synthetic dataset:
+
+- 500 generated texts × 500 reference texts → **~8.7 seconds** on a single CPU core.
+- This engine does a pairwise comparison of every generated text against every reference text, so cost scales as O(n × m). For the full 10,000 × 10,000 pair, that means either a much longer single run or, more realistically, batching/sharding the reference set — something to plan for before pointing Audito at very large reference corpora.
+- The Semantic Similarity engine sidesteps this for its own comparison step by embedding once and querying a FAISS flat index, so neighbor lookup stays fast even as the reference set grows — the bottleneck there is embedding time (sentence-transformers on CPU), not search time.
+
+These numbers are meant to be honest about current scale, not a marketing claim — see **Limitations** below for what this means in practice.
+
+---
+
+## Feasibility & Real-World Fit
+
+Audito targets a real, underserved gap: most LLM evaluation tooling checks output *quality* (accuracy, helpfulness, toxicity), but very little of it checks whether a model is **leaking the data it was trained or fine-tuned on** before that model ships. Audito is built specifically for the pre-deployment checkpoint — the moment after fine-tuning and before a model goes to production — where a team has both a reference dataset and the model's outputs in hand and needs a fast, reproducible answer to "did anything sensitive slip through?"
+
+What makes it practical rather than just a notebook script:
+
+- **Self-contained pipeline, no external API calls.** All 6 engines run locally (regex, Levenshtein, n-grams, token-frequency stats, and an offline sentence-transformers model). No reference or generated data is sent to a third-party LLM API to be checked, which matters when the whole point is keeping potentially sensitive training data from leaving your infrastructure.
+- **Async by design.** Audits are queued via Celery/Redis rather than blocking an HTTP request, so the system holds up for dataset sizes beyond what a synchronous request-response cycle could handle without timing out.
+- **Reproducible, audit-trail-friendly output.** Every audit produces a structured score breakdown plus a downloadable PDF report with masked findings — the kind of artifact a team can attach to a model card or a compliance review, rather than a transient terminal log.
+- **Role-based access (admin / researcher / viewer)** means this can sit in a shared environment — a research team or a small org — without every user being able to see or trigger everything.
+
+Where it currently fits best: **small-to-mid-size reference/output datasets** (the kind a team would use for spot-checking a fine-tuned or RAG-augmented model before release), not yet a drop-in tool for auditing foundation-model-scale training corpora — see Limitations.
+
+---
+
+## Limitations
+
+In the interest of an honest README, not a polished one:
+
+- **Membership Inference is a heuristic proxy, not a formal MIA.** It combines token-frequency-based perplexity-proxy scoring with 4-gram phrase overlap — useful as a fast, dependency-light signal, but it is not a calibrated shadow-model or loss-based membership inference attack from the academic literature. Treat its output as a relative risk indicator, not a statistical guarantee of training-set membership.
+- **Exact Match scales quadratically (O(n×m)).** As shown above, pairwise Levenshtein + n-gram comparison across two 10,000-row datasets is not a sub-minute operation on a single core. Large-scale audits will need batching, sampling, or parallelization that isn't built in yet.
+- **Sensitive Data Detection is regex-based.** It reliably catches structured patterns (emails, SSNs, credit cards, AWS keys, JWTs, private key headers) but, like any regex approach, won't catch sensitive information that doesn't match a known pattern (e.g., a person's name next to a diagnosis with no SSN attached).
+- **Canary Exposure relies on known patterns or user-supplied canaries.** It cannot detect leakage of a secret it was never told to look for and that doesn't match one of its default patterns.
+- **Single risk score is a simplification.** The weighted 0–100 score is useful as a triage signal, but the per-engine breakdown (visible in every report) is where the real diagnostic value is — a team should read past the headline number.
 
 ---
 
